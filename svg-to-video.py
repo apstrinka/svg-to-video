@@ -26,136 +26,75 @@ def main():
 	print(outDir)
 	frames = int(framerate * duration)
 	digit_length = len(str(frames))
-	writeFrames(filename, duration, framerate, outDir, frames, digit_length)
+	tree = ET.parse(filename)
+	preprocessTree(tree)
+	writeFrames(filename, tree, duration, framerate, outDir, frames, digit_length)
 	compileVideo(outDir, framerate, digit_length)
 
-def writeFrames(filename, duration, framerate, outDir, frames, digit_length):
-	tree = ET.parse(filename)
+def preprocessTree(tree):
 	root = tree.getroot()
-
+	
 	if ("svg" not in root.tag):
 		print("This script only works on svg files.")
 		exit()
+	
+	animationElements = getAnimationElements(root, {})
+	for element in animationElements.values():
+		preprocessAnimationElement(element, animationElements)
 
-	if not os.path.exists(outDir):
-		os.mkdir(outDir)
+def getAnimationElements(element, dict):
+	for child in element:
+		if child.tag in ["{http://www.w3.org/2000/svg}animate", "{http://www.w3.org/2000/svg}set","{http://www.w3.org/2000/svg}animateTransform"]:
+			id = child.get("id", len(dict))
+			dict[id] = child
+		getAnimationElements(child, dict)
+	return dict
 
-	for i in range(frames+1):
-		time = i / framerate
-		filename = outDir + "/" + str(i).zfill(digit_length)
-		if i % 50 == 0:
-			print("Processing frame " + str(i))
-		writeFrame(tree, time, filename)
+def preprocessAnimationElement(element, animationElements):
+	preprocessBeginAttribute(element, animationElements)
+	preprocessDurAttribute(element)
+	preprocessRepeatDurAttribute(element)
+	preprocessFromAttribute(element)
+	preprocessToAttribute(element)
 
-def writeFrame(tree, time, filename):
-	copied = copy.deepcopy(tree)
-	processElement(copied.getroot(), time)
-	copied.write(filename + ".svg")
-	cairosvg.svg2png(url=filename+".svg", write_to=filename+".png")
+def preprocessBeginAttribute(element, animationElements):
+	beginAttribute = element.get('begin')
+	begin = [0]
+	if beginAttribute is not None:
+		begin = parseBeginValue(beginAttribute)
+	element.set('begin', begin)
 
-def processElement(element, time):
-	for child in element[:]:
-		if child.tag == "{http://www.w3.org/2000/svg}animate":
-			element.remove(child)
-			processAnimateTag(element, child, time)
-		elif child.tag == "{http://www.w3.org/2000/svg}set":
-			element.remove(child)
-			processSetTag(element, child, time)
-		elif child.tag == "{http://www.w3.org/2000/svg}animateTransform":
-			element.remove(child)
-			processAnimateTransformTag(element, child, time)
-		else:
-			processElement(child, time)
+def preprocessDurAttribute(element):
+	durAttribute = element.get('dur')
+	dur = 'indefinite'
+	if durAttribute is not None and durAttribute != 'indefinite':
+		dur = parseClockValue(durAttribute)
+	element.set('dur', dur)
 
-def processAnimateTag(element, tag, time):
-	attributeName = tag.attrib['attributeName']
-	beginList = [0]
-	if 'begin' in tag.attrib:
-		beginList = parseBeginValue(tag.attrib['begin'])
-	dur = parseClockValue(tag.attrib['dur'])
+def preprocessRepeatDurAttribute(element):
+	repeatDurAttribute = element.get('repeatDur')
+	repeatCountAttribute = element.get('repeatCount')
+	dur = element.get('dur')
 	repeatDur = dur
-	if 'repeatDur' in tag.attrib:
-		if tag.attrib['repeatDur'] == "indefinite":
-			repeatDur = None
+	if repeatDurAttribute is not None:
+		if repeatDurAttribute == 'indefinite':
+			repeatDur = 'indefinite'
 		else:
-			repeatDur = parseClockValue(tag.attrib['repeatDur'])
-	elif 'repeatCount' in tag.attrib:
-		if tag.attrib['repeatCount'] == "indefinite":
-			repeatDur = None
+			repeatDur = parseClockValue(repeatDurAttribute)
+	elif repeatCountAttribute is not None:
+		if repeatCountAttribute == 'indefinite':
+			repeatDur = 'indefinite'
 		else:
-			repeatDur = dur*float(tag.attrib['repeatCount'])
-	
-	nonfutureBeginList = [b for b in beginList if b <= time]
-	if len(nonfutureBeginList) == 0:
-		return
-	
-	begin = max(nonfutureBeginList)
-	
-	if repeatDur is not None and time > begin + repeatDur:
-		if 'fill' in tag.attrib and tag.attrib['fill'] == 'freeze':
-			element.attrib[attributeName] = tag.attrib['to']
-		return
-	
-	fromArr = parseValue(tag.attrib['from'])
-	toArr = parseValue(tag.attrib['to'])
-	t = time - begin
-	while t > dur:
-		t = t - dur
-	t = t/dur
-	interpolated = interpolate(fromArr, toArr, t)
-	if isinstance(interpolated, Color):
-		element.attrib[attributeName] = str(interpolated)
-	else:
-		element.attrib[attributeName] = ' '.join(interpolated)
+			repeatDur = dur*float(repeatCountAttribute)
+	element.set('repeatDur', repeatDur)
 
-def processSetTag(element, tag, time):
-	attributeName = tag.attrib['attributeName']
-	begin = 0
-	if 'begin' in tag.attrib:
-		begin = parseClockValue(tag.attrib['begin'])
-	dur = None
-	if 'dur' in tag.attrib:
-		dur = parseClockValue(tag.attrib['dur'])
-	
-	if time < begin or (dur is not None and time > begin + dur):
-		return
-	
-	element.attrib[attributeName] = str(tag.attrib['to'])
+def preprocessFromAttribute(element):
+	fromAttribute = element.get('from')
+	element.set('from', parseValue(fromAttribute))
 
-def processAnimateTransformTag(element, tag, time):
-	attributeName = tag.attrib['attributeName']
-	type = tag.attrib['type']
-	begin = 0
-	if 'begin' in tag.attrib:
-		begin = parseClockValue(tag.attrib['begin'])
-	dur = parseClockValue(tag.attrib['dur'])
-	repeatDur = dur
-	if 'repeatDur' in tag.attrib:
-		if tag.attrib['repeatDur'] == "indefinite":
-			repeatDur = None
-		else:
-			repeatDur = parseClockValue(tag.attrib['repeatDur'])
-	elif 'repeatCount' in tag.attrib:
-		if tag.attrib['repeatCount'] == "indefinite":
-			repeatDur = None
-		else:
-			repeatDur = dur*float(tag.attrib['repeatCount'])
-	
-	if time < begin:
-		return
-	if repeatDur is not None and time > begin + repeatDur:
-		if 'fill' in tag.attrib and tag.attrib['fill'] == 'freeze':
-			element.attrib[attributeName] = tag.attrib['to']
-		return
-	
-	fromArr = parseValue(tag.attrib['from'])
-	toArr = parseValue(tag.attrib['to'])
-	t = time - begin
-	while t > dur:
-		t = t - dur
-	t = t/dur
-	interpolated = interpolateValueArray(fromArr, toArr, t)
-	element.attrib[attributeName] = type + '(' + ' '.join(interpolated) + ')'
+def preprocessToAttribute(element):
+	toAttribute = element.get('to')
+	element.set('to', parseValue(toAttribute))
 
 def parseValue(value):
 	if value.startswith("rgba("):
@@ -200,6 +139,110 @@ def parseClockValue(value):
 	if value.endswith('h'):
 		return 3600*float(value[:-1])
 	return float(value)
+
+def writeFrames(filename, tree, duration, framerate, outDir, frames, digit_length):
+	root = tree.getroot()
+
+	if not os.path.exists(outDir):
+		os.mkdir(outDir)
+
+	for i in range(frames+1):
+		time = i / framerate
+		filename = outDir + "/" + str(i).zfill(digit_length)
+		if i % 50 == 0:
+			print("Processing frame " + str(i))
+		writeFrame(tree, time, filename)
+
+def writeFrame(tree, time, filename):
+	copied = copy.deepcopy(tree)
+	processElement(copied.getroot(), time)
+	copied.write(filename + ".svg")
+	cairosvg.svg2png(url=filename+".svg", write_to=filename+".png")
+
+def processElement(element, time):
+	for child in element[:]:
+		if child.tag == "{http://www.w3.org/2000/svg}animate":
+			element.remove(child)
+			processAnimateTag(element, child, time)
+		elif child.tag == "{http://www.w3.org/2000/svg}set":
+			element.remove(child)
+			processSetTag(element, child, time)
+		elif child.tag == "{http://www.w3.org/2000/svg}animateTransform":
+			element.remove(child)
+			processAnimateTransformTag(element, child, time)
+		else:
+			processElement(child, time)
+
+def processAnimateTag(element, tag, time):
+	attributeName = tag.get('attributeName')
+	beginList = tag.get('begin')
+	dur = tag.get('dur')
+	repeatDur = tag.get('repeatDur')
+	
+	nonfutureBeginList = [b for b in beginList if b <= time]
+	if len(nonfutureBeginList) == 0:
+		return
+	
+	begin = max(nonfutureBeginList)
+	
+	if repeatDur != 'indefinite' and time > begin + repeatDur:
+		if 'fill' in tag.attrib and tag.attrib['fill'] == 'freeze':
+			element.attrib[attributeName] = tag.attrib['to']
+		return
+	
+	fromArr = tag.get('from')
+	toArr = tag.get('to')
+	t = time - begin
+	while t > dur:
+		t = t - dur
+	t = t/dur
+	interpolated = interpolate(fromArr, toArr, t)
+	if isinstance(interpolated, Color):
+		element.attrib[attributeName] = str(interpolated)
+	else:
+		element.attrib[attributeName] = ' '.join(interpolated)
+
+def processSetTag(element, tag, time):
+	attributeName = tag.get('attributeName')
+	beginList = tag.get('begin')
+	dur = tag.get('dur')
+	
+	nonfutureBeginList = [b for b in beginList if b <= time]
+	if len(nonfutureBeginList) == 0:
+		return
+	
+	begin = max(nonfutureBeginList)
+	
+	if dur != 'indefinite' and time > begin + dur:
+		return
+	
+	element.attrib[attributeName] = str(tag.attrib['to'])
+
+def processAnimateTransformTag(element, tag, time):
+	attributeName = tag.get('attributeName')
+	beginList = tag.get('begin')
+	dur = tag.get('dur')
+	repeatDur = tag.get('repeatDur')
+	
+	nonfutureBeginList = [b for b in beginList if b <= time]
+	if len(nonfutureBeginList) == 0:
+		return
+	
+	begin = max(nonfutureBeginList)
+	
+	if repeatDur != 'indefinite' and time > begin + repeatDur:
+		if 'fill' in tag.attrib and tag.attrib['fill'] == 'freeze':
+			element.attrib[attributeName] = tag.attrib['to']
+		return
+	
+	fromArr = parseValue(tag.attrib['from'])
+	toArr = parseValue(tag.attrib['to'])
+	t = time - begin
+	while t > dur:
+		t = t - dur
+	t = t/dur
+	interpolated = interpolateValueArray(fromArr, toArr, t)
+	element.attrib[attributeName] = type + '(' + ' '.join(interpolated) + ')'
 
 def interpolate(fromValue, toValue, t):
 	if isinstance(fromValue, Color):
