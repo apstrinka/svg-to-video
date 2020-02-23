@@ -23,7 +23,6 @@ def main():
 	duration = float(sys.argv[2])
 	framerate = float(sys.argv[3])
 	outDir = filename[:-4]
-	print(outDir)
 	frames = int(framerate * duration)
 	digit_length = len(str(frames))
 	tree = ET.parse(filename)
@@ -40,7 +39,9 @@ def preprocessTree(tree):
 	
 	animationElements = getAnimationElements(root, {})
 	for element in animationElements.values():
-		preprocessAnimationElement(element, animationElements)
+		preprocessed = element.get('preprocessEnded')
+		if preprocessed is None or preprocessed != True:
+			preprocessAnimationElement(element, animationElements)
 
 def getAnimationElements(element, dict):
 	for child in element:
@@ -51,17 +52,19 @@ def getAnimationElements(element, dict):
 	return dict
 
 def preprocessAnimationElement(element, animationElements):
+	element.set('preprocessBegun', True)
 	preprocessBeginAttribute(element, animationElements)
 	preprocessDurAttribute(element)
 	preprocessRepeatDurAttribute(element)
 	preprocessFromAttribute(element)
 	preprocessToAttribute(element)
+	element.set('preprocessEnded', True)
 
 def preprocessBeginAttribute(element, animationElements):
 	beginAttribute = element.get('begin')
 	begin = [0]
 	if beginAttribute is not None:
-		begin = parseBeginValue(beginAttribute)
+		begin = parseBeginValue(beginAttribute, animationElements)
 	element.set('begin', begin)
 
 def preprocessDurAttribute(element):
@@ -114,9 +117,41 @@ def parseValue(value):
 	subvalues = value.replace(',', ' ').split()
 	return [float(i) for i in subvalues]
 
-def parseBeginValue(value):
+def parseBeginValue(value, animationElements):
 	values = value.split(';')
-	return [parseClockValue(v) for v in values]
+	retList = []
+	for v in values:
+		if '.begin' in v:
+			retList.extend(parseBeginEventValue(v.strip(), animationElements))
+		else:
+			retList.append(parseClockValue(v.strip()))
+	return retList
+
+def parseBeginEventValue(value, animationElements):
+	index = value.index('.begin')
+	id = value[:index]
+	
+	refElement = animationElements[id]
+	refPreprocessBegun = refElement.get('preprocessBegun')
+	refPreprocessEnded = refElement.get('preprocessEnded')
+	if refPreprocessBegun == True and (refPreprocessEnded is None or refPreprocessEnded != True):
+		print('Detected circular event reference: ' + value)
+		return []
+	if refPreprocessBegun is None or refPreprocessBegun != True:
+		preprocessAnimationElement(refElement, animationElements)
+	
+	suffix = value[index+6:].lstrip()
+	suffixSign = suffix[0]
+	if suffixSign != '+' and suffixSign != '-':
+		print('Invalid event reference: ' + value)
+		return []
+	if suffixSign == '+':
+		suffixSign = 1
+	else:
+		suffixSign = -1
+	offset = suffixSign * parseClockValue(suffix[1:].lstrip())
+	
+	return [v + offset for v in refElement.get('begin')]
 
 def parseClockValue(value):
 	components = value.split(':')
