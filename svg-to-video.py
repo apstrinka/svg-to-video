@@ -57,7 +57,8 @@ def preprocessAnimationElement(element, animationElements):
 	preprocessDurAttribute(element)
 	preprocessRepeatDurAttribute(element)
 	preprocessFromAttribute(element)
-	preprocessToAttribute(element)
+	if element.tag != "{http://www.w3.org/2000/svg}set":
+		preprocessToAttribute(element)
 	element.set('preprocessEnded', True)
 
 def preprocessBeginAttribute(element, animationElements):
@@ -93,11 +94,13 @@ def preprocessRepeatDurAttribute(element):
 
 def preprocessFromAttribute(element):
 	fromAttribute = element.get('from')
-	element.set('from', parseValue(fromAttribute))
+	if fromAttribute is not None:
+		element.set('from', parseValue(fromAttribute))
 
 def preprocessToAttribute(element):
 	toAttribute = element.get('to')
-	element.set('to', parseValue(toAttribute))
+	if toAttribute is not None:
+		element.set('to', parseValue(toAttribute))
 
 def parseValue(value):
 	if value.startswith("rgba("):
@@ -105,7 +108,6 @@ def parseValue(value):
 		return Color(float(subvalues[0]), float(subvalues[1]), float(subvalues[2]), float(subvalues[3]))
 	if value.startswith("rgb("):
 		subvalues = value[4:-1].replace(',', ' ').split()
-		print(subvalues)
 		return Color(float(subvalues[0]), float(subvalues[1]), float(subvalues[2]), 100.0)
 	if value.startswith("#"):
 		if len(value) == 4:
@@ -141,15 +143,18 @@ def parseBeginEventValue(value, animationElements):
 		preprocessAnimationElement(refElement, animationElements)
 	
 	suffix = value[index+6:].lstrip()
-	suffixSign = suffix[0]
-	if suffixSign != '+' and suffixSign != '-':
-		print('Invalid event reference: ' + value)
-		return []
-	if suffixSign == '+':
-		suffixSign = 1
+	if len(suffix) > 0:
+		suffixSign = suffix[0]
+		if suffixSign != '+' and suffixSign != '-':
+			print('Invalid event reference: ' + value)
+			return []
+		if suffixSign == '+':
+			suffixSign = 1
+		else:
+			suffixSign = -1
+		offset = suffixSign * parseClockValue(suffix[1:].lstrip())
 	else:
-		suffixSign = -1
-	offset = suffixSign * parseClockValue(suffix[1:].lstrip())
+		offset = 0
 	
 	return [v + offset for v in refElement.get('begin')]
 
