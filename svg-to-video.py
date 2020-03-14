@@ -1,3 +1,4 @@
+import argparse
 import cairosvg
 import copy
 import math
@@ -16,12 +17,10 @@ class Color:
 		return "rgba(" + str(self.red) + "," + str(self.green) + "," + str(self.blue) + "," + str(self.alpha) + ")"
 
 def main():
-	if len(sys.argv) < 4:
-		print("Usage: python svg-to-video.py (filename) (duration in seconds) (framerate in frames/second)")
-		exit()
-	filename = sys.argv[1]
-	duration = float(sys.argv[2])
-	framerate = float(sys.argv[3])
+	args = parseArgs()
+	filename = args['filename']
+	duration = args['duration']
+	framerate = args['framerate']
 	outDir = filename[:-4]
 	frames = int(framerate * duration)
 	digit_length = len(str(frames))
@@ -29,6 +28,13 @@ def main():
 	preprocessTree(tree)
 	writeFrames(filename, tree, duration, framerate, outDir, frames, digit_length)
 	compileVideo(outDir, framerate, digit_length)
+
+def parseArgs():
+	parser = argparse.ArgumentParser(description="Convert .svg files to video.")
+	parser.add_argument("filename")
+	parser.add_argument("-d", "--duration", type=float, required=True)
+	parser.add_argument("-f", "--framerate", type=float, required=True)
+	return vars(parser.parse_args())
 
 def preprocessTree(tree):
 	root = tree.getroot()
@@ -189,8 +195,9 @@ def writeFrames(filename, tree, duration, framerate, outDir, frames, digit_lengt
 	for i in range(frames+1):
 		time = i / framerate
 		filename = outDir + "/" + str(i).zfill(digit_length)
-		if i % 50 == 0:
-			print("Processing frame " + str(i))
+		if i % 10 == 0:
+			sys.stdout.write("\rProcessing frame " + str(i) + " out of " + str(frames))
+			sys.stdout.flush()
 		writeFrame(tree, time, filename)
 
 def writeFrame(tree, time, filename):
@@ -233,7 +240,7 @@ def processAnimateTag(element, tag, time):
 	fromArr = tag.get('from')
 	toArr = tag.get('to')
 	t = time - begin
-	while t > dur:
+	while t > dur+0.0001:
 		t = t - dur
 	t = t/dur
 	interpolated = interpolate(fromArr, toArr, t)
@@ -278,7 +285,7 @@ def processAnimateTransformTag(element, tag, time):
 	fromArr = parseValue(tag.attrib['from'])
 	toArr = parseValue(tag.attrib['to'])
 	t = time - begin
-	while t > dur:
+	while t > dur+0.0001:
 		t = t - dur
 	t = t/dur
 	interpolated = interpolateValueArray(fromArr, toArr, t)
