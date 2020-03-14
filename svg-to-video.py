@@ -19,21 +19,29 @@ class Color:
 def main():
 	args = parseArgs()
 	filename = args['filename']
+	begin = args['begin']
 	duration = args['duration']
 	framerate = args['framerate']
+	scale = args['scale']
+	startframe = args['startframe']
+	endframe = args['endframe']
 	outDir = filename[:-4]
 	frames = int(framerate * duration)
 	digit_length = len(str(frames))
 	tree = ET.parse(filename)
 	preprocessTree(tree)
-	writeFrames(filename, tree, duration, framerate, outDir, frames, digit_length)
+	writeFrames(filename, tree, begin, duration, framerate, outDir, frames, digit_length, scale, startframe, endframe)
 	compileVideo(outDir, framerate, digit_length)
 
 def parseArgs():
 	parser = argparse.ArgumentParser(description="Convert .svg files to video.")
 	parser.add_argument("filename")
+	parser.add_argument("-b", "--begin", type=float, default=0)
 	parser.add_argument("-d", "--duration", type=float, required=True)
 	parser.add_argument("-f", "--framerate", type=float, required=True)
+	parser.add_argument("-s", "--scale", type=float, default=1)
+	parser.add_argument("--startframe", type=int, default=-1)
+	parser.add_argument("--endframe", type=int, default=-1)
 	return vars(parser.parse_args())
 
 def preprocessTree(tree):
@@ -186,25 +194,27 @@ def parseClockValue(value):
 		return 3600*float(value[:-1])
 	return float(value)
 
-def writeFrames(filename, tree, duration, framerate, outDir, frames, digit_length):
+def writeFrames(filename, tree, begin, duration, framerate, outDir, frames, digit_length, scale, startframe, endframe):
 	root = tree.getroot()
 
 	if not os.path.exists(outDir):
 		os.mkdir(outDir)
 
 	for i in range(frames+1):
-		time = i / framerate
+		if i < startframe or (endframe > -1 and i > endframe):
+			continue
+		time = i / framerate + begin
 		filename = outDir + "/" + str(i).zfill(digit_length)
 		if i % 10 == 0:
 			sys.stdout.write("\rProcessing frame " + str(i) + " out of " + str(frames))
 			sys.stdout.flush()
-		writeFrame(tree, time, filename)
+		writeFrame(tree, time, filename, scale)
 
-def writeFrame(tree, time, filename):
+def writeFrame(tree, time, filename, scale):
 	copied = copy.deepcopy(tree)
 	processElement(copied.getroot(), time)
 	copied.write(filename + ".svg")
-	cairosvg.svg2png(url=filename+".svg", write_to=filename+".png")
+	cairosvg.svg2png(url=filename+".svg", write_to=filename+".png", scale=scale)
 
 def processElement(element, time):
 	for child in element[:]:
