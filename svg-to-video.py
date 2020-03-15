@@ -209,6 +209,7 @@ def writeFrames(filename, tree, begin, duration, framerate, outDir, frames, digi
 			sys.stdout.write("\rProcessing frame " + str(i) + " out of " + str(frames))
 			sys.stdout.flush()
 		writeFrame(tree, time, filename, scale)
+	print()
 
 def writeFrame(tree, time, filename, scale):
 	copied = copy.deepcopy(tree)
@@ -277,6 +278,7 @@ def processSetTag(element, tag, time):
 
 def processAnimateTransformTag(element, tag, time):
 	attributeName = tag.get('attributeName')
+	type = tag.get('type')
 	beginList = tag.get('begin')
 	dur = tag.get('dur')
 	repeatDur = tag.get('repeatDur')
@@ -292,8 +294,8 @@ def processAnimateTransformTag(element, tag, time):
 			element.attrib[attributeName] = tag.attrib['to']
 		return
 	
-	fromArr = parseValue(tag.attrib['from'])
-	toArr = parseValue(tag.attrib['to'])
+	fromArr = tag.get('from')
+	toArr = tag.get('to')
 	t = time - begin
 	while t > dur+0.0001:
 		t = t - dur
