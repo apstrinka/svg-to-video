@@ -67,6 +67,7 @@ def getAnimationElements(element, dict):
 
 def preprocessAnimationElement(element, animationElements):
 	element.set('preprocessBegun', True)
+	preprocessAdditiveAttribute(element)
 	preprocessBeginAttribute(element, animationElements)
 	preprocessDurAttribute(element)
 	preprocessRepeatDurAttribute(element)
@@ -74,6 +75,13 @@ def preprocessAnimationElement(element, animationElements):
 	if element.tag != "{http://www.w3.org/2000/svg}set":
 		preprocessToAttribute(element)
 	element.set('preprocessEnded', True)
+
+def preprocessAdditiveAttribute(element):
+	additiveAttribute = element.get('additive')
+	additive = 'replace'
+	if additiveAttribute in ('replace', 'sum'):
+		additive = additiveAttribute
+	element.set('additive', additive)
 
 def preprocessBeginAttribute(element, animationElements):
 	beginAttribute = element.get('begin')
@@ -278,6 +286,7 @@ def processSetTag(element, tag, time):
 
 def processAnimateTransformTag(element, tag, time):
 	attributeName = tag.get('attributeName')
+	additive = tag.get('additive')
 	type = tag.get('type')
 	beginList = tag.get('begin')
 	dur = tag.get('dur')
@@ -301,7 +310,10 @@ def processAnimateTransformTag(element, tag, time):
 		t = t - dur
 	t = t/dur
 	interpolated = interpolateValueArray(fromArr, toArr, t)
-	element.attrib[attributeName] = type + '(' + ' '.join(interpolated) + ')'
+	value = type + '(' + ' '.join(interpolated) + ')'
+	if additive == 'sum':
+		value = element.attrib[attributeName] + ' ' + value
+	element.attrib[attributeName] = value
 
 def interpolate(fromValue, toValue, t):
 	if isinstance(fromValue, Color):
