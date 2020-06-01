@@ -291,6 +291,7 @@ def processAnimateTransformTag(element, tag, time):
 	beginList = tag.get('begin')
 	dur = tag.get('dur')
 	repeatDur = tag.get('repeatDur')
+	toArr = tag.get('to')
 	
 	nonfutureBeginList = [b for b in beginList if b <= time]
 	if len(nonfutureBeginList) == 0:
@@ -300,11 +301,14 @@ def processAnimateTransformTag(element, tag, time):
 	
 	if repeatDur != 'indefinite' and time > begin + repeatDur:
 		if 'fill' in tag.attrib and tag.attrib['fill'] == 'freeze':
-			element.attrib[attributeName] = tag.attrib['to']
+			interpolated = [str(i) for i in toArr]
+			value = type + '(' + ' '.join(interpolated) + ')'
+			if additive == 'sum':
+				value = element.attrib[attributeName] + ' ' + value
+			element.attrib[attributeName] = value
 		return
 	
 	fromArr = tag.get('from')
-	toArr = tag.get('to')
 	t = time - begin
 	while t > dur+0.0001:
 		t = t - dur
