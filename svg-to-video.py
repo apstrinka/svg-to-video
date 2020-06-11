@@ -14,7 +14,10 @@ class Color:
 		self.alpha = alpha
 	
 	def __str__(self):
-		return "rgba(" + str(self.red) + "," + str(self.green) + "," + str(self.blue) + "," + str(self.alpha) + ")"
+		if self.alpha is not None:
+			return "rgba(" + str(self.red) + "," + str(self.green) + "," + str(self.blue) + "," + str(self.alpha) + ")"
+		else:
+			return "rgb(" + str(self.red) + "," + str(self.green) + "," + str(self.blue) + ")"
 
 def main():
 	args = parseArgs()
@@ -130,12 +133,12 @@ def parseValue(value):
 		return Color(float(subvalues[0]), float(subvalues[1]), float(subvalues[2]), float(subvalues[3]))
 	if value.startswith("rgb("):
 		subvalues = value[4:-1].replace(',', ' ').split()
-		return Color(float(subvalues[0]), float(subvalues[1]), float(subvalues[2]), 100.0)
+		return Color(float(subvalues[0]), float(subvalues[1]), float(subvalues[2]), None)
 	if value.startswith("#"):
 		if len(value) == 4:
-			return Color(float(int(value[1], 16)*16), float(int(value[2], 16)*16), float(int(value[3], 16)*16), 100.0)
+			return Color(float(int(value[1], 16)*16), float(int(value[2], 16)*16), float(int(value[3], 16)*16), None)
 		if len(value) == 7:
-			return Color(float(int(value[1:3], 16)), float(int(value[3:5], 16)), float(int(value[5:7], 16)), 100.0)
+			return Color(float(int(value[1:3], 16)), float(int(value[3:5], 16)), float(int(value[5:7], 16)), None)
 		if len(value) == 9:
 			return Color(float(int(value[3:5], 16)), float(int(value[5:7], 16)), float(int(value[7:9], 16)), float(int(value[3:5], 16))*100/255)
 	subvalues = value.replace(',', ' ').split()
@@ -329,7 +332,10 @@ def interpolateColor(fromColor, toColor, t):
 	r = interpolateSingleValue(fromColor.red, toColor.red, t)
 	g = interpolateSingleValue(fromColor.green, toColor.green, t)
 	b = interpolateSingleValue(fromColor.blue, toColor.blue, t)
-	a = interpolateSingleValue(fromColor.alpha, toColor.alpha, t)
+	if fromColor.alpha is not None and toColor.alpha is not None:
+		a = interpolateSingleValue(fromColor.alpha, toColor.alpha, t)
+	else:
+		a = None
 	return Color(r, g, b, a)
 
 def interpolateValueArray(fromArr, toArr, t):
